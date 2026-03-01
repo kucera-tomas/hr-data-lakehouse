@@ -1,5 +1,6 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.providers.amazon.aws.operators.s3 import S3CreateObjectOperator
 from datetime import datetime
 import logging
 
@@ -46,5 +47,15 @@ with DAG(
         python_callable=complete_extraction,
     )
 
-    # This ensures that task2 runs after task1
-    task1 >> task2
+    # Write a file to S3
+    task3 = S3CreateObjectOperator(
+        task_id='upload_to_s3',
+        s3_bucket='hr-data-lake-2026',
+        s3_key='logs/extraction_{{ ds }}.txt',
+        data='Extraction completed successfully on {{ ds }}.',
+        replace=True,
+        aws_conn_id='aws_default'
+    )
+
+    # This ensures that task3 runs after task2 that runs after task1
+    task1 >> task2 >> task3
