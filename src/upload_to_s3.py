@@ -14,8 +14,8 @@ BUCKET_NAME = os.getenv('AWS_BUCKET_NAME')
 REGION_NAME = os.getenv('AWS_REGION')
 
 # Define local file and S3 file name
-LOCAL_FILE = os.path.join(BASE_DIR, 'data', 'test_data.txt')
-S3_FILE_NAME = 'uploaded_test_data.txt' 
+LOCAL_FILE = os.path.join(BASE_DIR, 'data', 'employees.csv')
+S3_FILE_NAME = 'employees.csv' 
 
 def upload_file():
     # Check if keys loaded correctly
