@@ -2,14 +2,14 @@
 
 A data engineering project that orchestrates the movement of HR data from source systems to an AWS Data Lake, utilizing **Apache Airflow** for orchestration and **AWS Athena** for serverless transformation and analytics.
 
-## 🏗️ Architecture
+## Architecture
 The pipeline follows an **ELT (Extract, Load, Transform)** pattern:
 
 1.  **Extract:** Python script generates mock HR data (simulating source API).
 2.  **Load:** Airflow pushes raw CSV data to AWS S3 (Bronze Layer).
 3.  **Transform:** Airflow triggers AWS Athena to convert CSVs into optimized Parquet tables (Silver/Gold Layer).
 
-## 🚀 Key Features
+## Key Features
 * **Orchestration:** Built with **Astronomer (Airflow 2.9)** to schedule and monitor workflows.
 * **Infrastructure as Code:** Uses **Boto3** and **Airflow Operators** to manage AWS resources programmatically.
 * **Data Lake Architecture:**
@@ -18,13 +18,27 @@ The pipeline follows an **ELT (Extract, Load, Transform)** pattern:
 * **Performance Optimization:** Implemented **Partitioning** strategies and columnar storage to reduce query costs and improve performance by ~60%.
 * **Security:** Environment variables and Airflow Connections used for secure credential management.
 
-## 🛠️ Tech Stack
+## Performance Optimization
+Implemented a partitioned Data Lakehouse architecture to optimize query costs and speed.
+
+### Benchmark Results
+I compared a full table scan vs. a partition-pruned query on the Silver Layer.
+
+| Query Type | Data Scanned | Cost Reduction |
+| :--- | :--- | :--- |
+| **Full Scan** (All Depts) | 76.63 KB | - |
+| **Partitioned** (Engineering) | 20.38 KB | **~73.4%** |
+
+*Evidence:*
+> By partitioning the Silver layer by `department`, Athena only reads the relevant S3 folder, skipping 73% of the data. This directly translates to lower AWS costs.
+
+## Tech Stack
 * **Language:** Python 3.9+, SQL (Presto/Trino dialect)
 * **Orchestration:** Apache Airflow (via Astronomer CLI)
 * **Cloud Provider:** AWS (S3, Athena, Glue Catalog)
 * **Containerization:** Docker
 
-## 📂 Project Structure
+## Project Structure
 ```text
 .
 ├── dags/                   # Airflow DAGs (Workflows)
@@ -39,7 +53,7 @@ The pipeline follows an **ELT (Extract, Load, Transform)** pattern:
 └── requirements.txt        # Python dependencies (boto3, amazon-providers)
 ```
 
-## ⚡ How to Run Locally
+## How to Run Locally
 
 ### 1. Prerequisites
 * Docker Desktop (Running)

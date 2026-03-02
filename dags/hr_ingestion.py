@@ -36,20 +36,20 @@ with DAG(
         replace=True                           # Overwrite if we re-run the DAG
     )
 
-    create_bronze_table = AthenaOperator(
-        task_id='create_bronze_table',
-        query='create_bronze_table.sql',    # The file name we just created
-        database='default',                 # The Athena database name
-        output_location=f's3://{S3_BUCKET_NAME}/athena_results/', # Where to save query logs
-        aws_conn_id='aws_default',
-        region_name='eu-north-1'
-    )
-
     drop_bronze_table = AthenaOperator(
         task_id='drop_bronze_table',
         query='drop_bronze.sql',
         database='default',
         output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
+        aws_conn_id='aws_default',
+        region_name='eu-north-1'
+    )
+
+    create_bronze_table = AthenaOperator(
+        task_id='create_bronze_table',
+        query='create_bronze_table.sql',    # The file name we just created
+        database='default',                 # The Athena database name
+        output_location=f's3://{S3_BUCKET_NAME}/athena_results/', # Where to save query logs
         aws_conn_id='aws_default',
         region_name='eu-north-1'
     )
@@ -72,5 +72,23 @@ with DAG(
         region_name='eu-north-1'
     )
 
+    drop_gold_table = AthenaOperator(
+        task_id='drop_gold_table',
+        query='drop_gold.sql',
+        database='default',
+        output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
+        aws_conn_id='aws_default',
+        region_name='eu-north-1'
+    )
+
+    build_gold_layer = AthenaOperator(
+        task_id='build_gold_layer',
+        query='create_gold_business_stats.sql',
+        database='default',
+        output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
+        aws_conn_id='aws_default',
+        region_name='eu-north-1'
+    )
+
     # Task Dependency
-    generate_data >> upload_to_s3 >> drop_bronze_table >> create_bronze_table >> drop_silver_table >> transform_silver
+    generate_data >> upload_to_s3 >> drop_bronze_table >> create_bronze_table >> drop_silver_table >> transform_silver >> drop_gold_table >> build_gold_layer

@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS hr_gold_department_stats;
