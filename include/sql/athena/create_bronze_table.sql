@@ -3,9 +3,9 @@ CREATE EXTERNAL TABLE IF NOT EXISTS hr_bronze (
     first_name STRING,
     last_name STRING,
     email STRING,
-    salary INT,
+    salary STRING,
     department STRING,
-    hire_date DATE
+    hire_date STRING
 )
 ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
 WITH SERDEPROPERTIES (

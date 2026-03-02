@@ -45,5 +45,32 @@ with DAG(
         region_name='eu-north-1'
     )
 
+    drop_bronze_table = AthenaOperator(
+        task_id='drop_bronze_table',
+        query='drop_bronze.sql',
+        database='default',
+        output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
+        aws_conn_id='aws_default',
+        region_name='eu-north-1'
+    )
+
+    drop_silver_table = AthenaOperator(
+        task_id='drop_silver_table',
+        query='drop_silver.sql',
+        database='default',
+        output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
+        aws_conn_id='aws_default',
+        region_name='eu-north-1'
+    )
+
+    transform_silver = AthenaOperator(
+        task_id='transform_silver',
+        query='transform_silver.sql',
+        database='default',
+        output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
+        aws_conn_id='aws_default',
+        region_name='eu-north-1'
+    )
+
     # Task Dependency
-    generate_data >> upload_to_s3 >> create_bronze_table
+    generate_data >> upload_to_s3 >> drop_bronze_table >> create_bronze_table >> drop_silver_table >> transform_silver
