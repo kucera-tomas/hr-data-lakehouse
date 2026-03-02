@@ -67,11 +67,10 @@ with DAG(
         region_name='eu-north-1'
     )
 
-    # [NEW] Clean Silver S3 Data
     clean_silver_s3 = S3DeleteObjectsOperator(
         task_id='clean_silver_s3',
         bucket=S3_BUCKET_NAME,
-        prefix='silver/hr_cleaned/',  # <--- CHECK THIS PATH matches your SQL target
+        prefix='silver/hr_cleaned/',
         aws_conn_id='aws_default'
     )
 
@@ -104,11 +103,10 @@ with DAG(
         region_name='eu-north-1'
     )
 
-    # [NEW] Clean Gold S3 Data
     clean_gold_s3 = S3DeleteObjectsOperator(
         task_id='clean_gold_s3',
         bucket=S3_BUCKET_NAME,
-        prefix='gold/department_stats/',  # Matches the error log location
+        prefix='gold/department_stats/',
         aws_conn_id='aws_default'
     )
 
@@ -122,17 +120,16 @@ with DAG(
     )
 
     # Task Dependency Chain
-    # Note: Added the clean steps into the chain
     (
         generate_data 
         >> upload_to_s3 
         >> drop_bronze_table 
         >> create_bronze_table 
         >> drop_silver_table 
-        >> clean_silver_s3        # <--- Added
+        >> clean_silver_s3
         >> transform_silver 
         >> check_silver_quality 
         >> drop_gold_table 
-        >> clean_gold_s3          # <--- Added
+        >> clean_gold_s3
         >> build_gold_layer
     )
