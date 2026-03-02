@@ -1,9 +1,11 @@
 import os
-
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.providers.amazon.aws.transfers.local_to_s3 import LocalFilesystemToS3Operator
 from airflow.providers.amazon.aws.operators.athena import AthenaOperator
+from airflow.providers.amazon.aws.operators.s3 import S3DeleteObjectsOperator  # <--- NEW IMPORT
+from airflow.operators.python import PythonOperator
+from utils.data_quality import check_dq
 from datetime import datetime
 
 # CONSTANTS
@@ -20,22 +22,23 @@ with DAG(
     tags=['ingestion', 's3', 'bronze']
 ) as dag:
 
-    # Task 1: Generate the Data (Simulating Source System)
+    # Task 1: Generate the Data
     generate_data = BashOperator(
         task_id='generate_mock_data',
         bash_command=f'python /usr/local/airflow/src/generators/generate_people.py 1000 {LOCAL_FILE_PATH}'
     )
 
-    # Task 2: Upload to S3 (The "Load" Step)
+    # Task 2: Upload to S3
     upload_to_s3 = LocalFilesystemToS3Operator(
         task_id='upload_to_s3',
-        filename=LOCAL_FILE_PATH,              # laptop file (inside Docker)
-        dest_key='bronze/hr_raw_{{ ds }}.csv', # File name in S3 (Dynamic Date!)
-        dest_bucket=S3_BUCKET_NAME,            
-        aws_conn_id='aws_default',             # AWS Connection
-        replace=True                           # Overwrite if we re-run the DAG
+        filename=LOCAL_FILE_PATH,
+        dest_key='bronze/hr_raw_{{ ds }}.csv',
+        dest_bucket=S3_BUCKET_NAME,
+        aws_conn_id='aws_default',
+        replace=True
     )
 
+    # --- BRONZE LAYER ---
     drop_bronze_table = AthenaOperator(
         task_id='drop_bronze_table',
         query='drop_bronze.sql',
@@ -47,13 +50,14 @@ with DAG(
 
     create_bronze_table = AthenaOperator(
         task_id='create_bronze_table',
-        query='create_bronze_table.sql',    # The file name we just created
-        database='default',                 # The Athena database name
-        output_location=f's3://{S3_BUCKET_NAME}/athena_results/', # Where to save query logs
+        query='create_bronze_table.sql',
+        database='default',
+        output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
         aws_conn_id='aws_default',
         region_name='eu-north-1'
     )
 
+    # --- SILVER LAYER ---
     drop_silver_table = AthenaOperator(
         task_id='drop_silver_table',
         query='drop_silver.sql',
@@ -61,6 +65,14 @@ with DAG(
         output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
         aws_conn_id='aws_default',
         region_name='eu-north-1'
+    )
+
+    # [NEW] Clean Silver S3 Data
+    clean_silver_s3 = S3DeleteObjectsOperator(
+        task_id='clean_silver_s3',
+        bucket=S3_BUCKET_NAME,
+        prefix='silver/hr_cleaned/',  # <--- CHECK THIS PATH matches your SQL target
+        aws_conn_id='aws_default'
     )
 
     transform_silver = AthenaOperator(
@@ -72,6 +84,17 @@ with DAG(
         region_name='eu-north-1'
     )
 
+    check_silver_quality = PythonOperator(
+        task_id='check_silver_data_quality',
+        python_callable=check_dq,
+        op_kwargs={
+            'query': "SELECT COUNT(*) FROM hr_silver WHERE salary < 0",
+            'bucket_name': S3_BUCKET_NAME,
+            'region_name': 'eu-north-1'
+        }
+    )
+
+    # --- GOLD LAYER ---
     drop_gold_table = AthenaOperator(
         task_id='drop_gold_table',
         query='drop_gold.sql',
@@ -79,6 +102,14 @@ with DAG(
         output_location=f's3://{S3_BUCKET_NAME}/athena_results/',
         aws_conn_id='aws_default',
         region_name='eu-north-1'
+    )
+
+    # [NEW] Clean Gold S3 Data
+    clean_gold_s3 = S3DeleteObjectsOperator(
+        task_id='clean_gold_s3',
+        bucket=S3_BUCKET_NAME,
+        prefix='gold/department_stats/',  # Matches the error log location
+        aws_conn_id='aws_default'
     )
 
     build_gold_layer = AthenaOperator(
@@ -90,5 +121,18 @@ with DAG(
         region_name='eu-north-1'
     )
 
-    # Task Dependency
-    generate_data >> upload_to_s3 >> drop_bronze_table >> create_bronze_table >> drop_silver_table >> transform_silver >> drop_gold_table >> build_gold_layer
+    # Task Dependency Chain
+    # Note: Added the clean steps into the chain
+    (
+        generate_data 
+        >> upload_to_s3 
+        >> drop_bronze_table 
+        >> create_bronze_table 
+        >> drop_silver_table 
+        >> clean_silver_s3        # <--- Added
+        >> transform_silver 
+        >> check_silver_quality 
+        >> drop_gold_table 
+        >> clean_gold_s3          # <--- Added
+        >> build_gold_layer
+    )
