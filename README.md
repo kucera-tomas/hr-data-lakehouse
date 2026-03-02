@@ -9,6 +9,30 @@ The pipeline follows an **ELT (Extract, Load, Transform)** pattern:
 2.  **Load:** Airflow pushes raw CSV data to AWS S3 (Bronze Layer).
 3.  **Transform:** Airflow triggers AWS Athena to convert CSVs into optimized Parquet tables (Silver/Gold Layer).
 
+## Architecture Diagram
+
+```mermaid
+graph LR
+    subgraph Local_Docker ["Local Airflow (Docker)"]
+        Gen[Python Generator] -->|Creates CSV| LocalFS[Local FS]
+        LocalFS -->|Uploads| S3Raw
+    end
+
+    subgraph AWS_Cloud ["AWS Cloud"]
+        S3Raw[(S3 Bucket <br> Bronze Layer)]
+        Athena((AWS Athena))
+        S3Silver[(S3 Bucket <br> Silver Layer)]
+        S3Gold[(S3 Bucket <br> Gold Layer)]
+        
+        S3Raw -->|External Table| Athena
+        Athena -->|CTAS / Parquet| S3Silver
+        S3Silver -->|Aggregation| S3Gold
+    end
+
+    Airflow((Airflow DAG)) -->|Triggers| Gen
+    Airflow -->|Triggers| Athena
+```
+
 ## Key Features
 * **Orchestration:** Built with **Astronomer (Airflow 2.9)** to schedule and monitor workflows.
 * **Infrastructure as Code:** Uses **Boto3** and **Airflow Operators** to manage AWS resources programmatically.
@@ -32,6 +56,9 @@ I compared a full table scan vs. a partition-pruned query on the Silver Layer.
 *Evidence:*
 > By partitioning the Silver layer by `department`, Athena only reads the relevant S3 folder, skipping 73% of the data. This directly translates to lower AWS costs.
 
+## Automated Data Quality
+Implemented a "Circuit Breaker" pattern using Airflow's PythonOperator. The pipeline automatically halts if critical data quality issues (e.g., NULL emails, negative salaries) are detected before entering the Gold layer.
+
 ## Tech Stack
 * **Language:** Python 3.9+, SQL (Presto/Trino dialect)
 * **Orchestration:** Apache Airflow (via Astronomer CLI)
@@ -41,16 +68,22 @@ I compared a full table scan vs. a partition-pruned query on the Silver Layer.
 ## Project Structure
 ```text
 .
-├── dags/                   # Airflow DAGs (Workflows)
-│   └── extraction_example.py # Main ELT DAG (S3 Uploads & Logging)
-├── include/                # SQL and Helper scripts
-│   └── sql/
-│       └── athena/         # DDL and DML scripts for Athena
-├── src/                    # Utility Python scripts (Boto3 wrappers)
-│   ├── upload_to_s3.py     # Local upload testing
-│   └── list_files.py       # S3 verification script
-├── Dockerfile              # Astro Runtime configuration
-└── requirements.txt        # Python dependencies (boto3, amazon-providers)
+├── dags/                       # Airflow DAGs
+│   ├── hr_ingestion.py         # The Main ELT Pipeline
+│   └── utils/
+│       └── data_quality.py     # "Circuit Breaker" Quality Check Logic
+├── include/                    # SQL Transformations
+│   └── sql/athena/
+│       ├── create_bronze.sql
+│       ├── transform_silver.sql
+│       └── create_gold.sql
+├── src/                        # Python Scripts
+│   └── generators/
+│       └── generate_people.py  # Faker script for mock data
+├── assets/                     # Screenshots and Diagrams
+│   └── dashboard_screenshot.png
+├── Dockerfile                  # Astro Runtime
+└── requirements.txt            # Python dependencies
 ```
 
 ## How to Run Locally
