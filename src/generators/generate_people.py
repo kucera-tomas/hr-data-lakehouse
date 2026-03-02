@@ -1,6 +1,8 @@
 import csv
 import random
 from faker import Faker
+import sys
+import os
 
 fake = Faker()
 
@@ -65,7 +67,17 @@ def save_to_csv(num_rows, output_path):
             person_data = generate_person()
             writer.writerow(person_data)
 
+
 if __name__ == "__main__":
-    import os
-    output_path = "/usr/local/airflow/data/hr_data_raw.csv"
-    save_to_csv(1000, output_path)
+    num_rows = 100
+    output_path = "hr_data.csv"
+
+    if len(sys.argv) > 2:
+        num_rows = int(sys.argv[1])
+        output_path = sys.argv[2]
+    
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    print(f"Generating {num_rows} rows to {output_path}...")
+    save_to_csv(num_rows, output_path)
+    print(f"Success! File created at {output_path}")
